@@ -8,9 +8,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// Uses the fiber body parser to parse and validate the request
-// body to struct T, marshaling the resulting struct to a byte
-// array to be used as a queue service message body.
+// Uses the fiber body parser to parse and validate the request body to struct T,
+// marshaling the resulting struct to a byte slice to be used as a queue service message body.
 func ParseValidateBodyToQueueBody[T any](ctx *fiber.Ctx, validator *validator.Validate, bodyType *T) (queueBody []byte, statusCode int, err error) {
 	if err := ctx.BodyParser(bodyType); err != nil {
 		return nil, fiber.StatusBadRequest, errors.New("invalid request body")

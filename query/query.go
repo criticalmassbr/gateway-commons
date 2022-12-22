@@ -1,7 +1,7 @@
 package query
 
 import (
-	"sort"
+	"errors"
 	"strconv"
 	"strings"
 	"unicode"
@@ -15,18 +15,43 @@ type Paginable struct {
 }
 
 type Filter struct {
-	Field     string `json:"field"`     // the field to filter by eg: "price"
-	Value     string `json:"value"`     // string representation of the value to apply the filter, eg: "10"
-	Operation string `json:"operation"` // the operation to use for filtering, eg: gt (greather than)
+	Field     string         `json:"field"`     // the field to filter by eg: "price"
+	Value     string         `json:"value"`     // string representation of the value to apply the filter, eg: "10", "tag1;tag2"
+	Operation FilterOperator `json:"operation"` // the operation to use for filtering, eg: gt (greather than)
+}
+
+type FilterOperator string
+
+const (
+	FilterOperatorEqual    FilterOperator = "eq"
+	FilterOperatorContains FilterOperator = "contains"
+)
+
+func (f *FilterOperator) IsValid() bool {
+	switch *f {
+	case FilterOperatorEqual, FilterOperatorContains:
+		return true
+	}
+
+	return false
 }
 
 type Order struct {
 	Field string `json:"field"` // the field to sort by eg: "price"
 	Asc   bool   `json:"asc"`   // if true, sort on ascending order, else descending
-	idx   int
 }
 
-func hasOneLetter(s string) bool {
+type QueryKey string
+
+const (
+	QueryKeyLimit   QueryKey = "limit"
+	QueryKeyOffset  QueryKey = "offset"
+	QueryKeySearch  QueryKey = "search"
+	QueryKeyOrder   QueryKey = "order"
+	QueryKeyFilters QueryKey = "filters"
+)
+
+func hasALetter(s string) bool {
 	for _, r := range s {
 		if unicode.IsLetter(r) {
 			return true
@@ -54,7 +79,7 @@ func getPositiveIntFromQueryWithFallback(ctx *fiber.Ctx, key string, fallbackVal
 }
 
 // eg: "ilove[brazil]" -> "ilove", "brazil"
-func getStrBeforeAndInbetweenBrackets(k string) (string, string) {
+func getStrBeforeAndInbetweenBrackets(k string) (string, FilterOperator) {
 	s := strings.Index(k, "[")
 	if s == -1 {
 		return "", ""
@@ -65,13 +90,25 @@ func getStrBeforeAndInbetweenBrackets(k string) (string, string) {
 		return "", ""
 	}
 
-	return k[:s], k[s+1 : e]
+	return k[:s], FilterOperator(k[s+1 : e])
+}
+
+type QueryParamSeparator string
+
+const (
+	QueryParamSeparatorArray QueryParamSeparator = ";"
+	QueryParamSeparatorMap   QueryParamSeparator = ","
+	QueryParamSeparatorValue QueryParamSeparator = ":"
+)
+
+func splitStringBySeparator(s string, sep QueryParamSeparator) []string {
+	return strings.Split(s, string(sep))
 }
 
 func GetPaginationFromQuery(ctx *fiber.Ctx) Paginable {
 	return Paginable{
-		Limit:  getPositiveIntFromQueryWithFallback(ctx, "limit", 10),
-		Offset: getPositiveIntFromQueryWithFallback(ctx, "offset", 0),
+		Limit:  getPositiveIntFromQueryWithFallback(ctx, string(QueryKeyLimit), 10),
+		Offset: getPositiveIntFromQueryWithFallback(ctx, string(QueryKeyOffset), 0),
 	}
 }
 
@@ -84,7 +121,7 @@ func GetFilterFromQuery(c *fiber.Ctx) []Filter {
 
 		field, op := getStrBeforeAndInbetweenBrackets(k)
 
-		if !hasOneLetter(op) {
+		if !hasALetter(string(op)) {
 			return
 		}
 
@@ -94,42 +131,59 @@ func GetFilterFromQuery(c *fiber.Ctx) []Filter {
 	return f
 }
 
-func GetOrderFromQuery(c *fiber.Ctx) []Order {
-	s := []Order{}
+func getOrderFromQuery(queryParams map[string]string) []Order {
+	if value, ok := queryParams[string(QueryKeyOrder)]; ok {
+		return getOrderFields(value)
+	}
 
-	c.Context().QueryArgs().VisitAll(func(key, val []byte) {
-		k := string(key)
-		v := string(val)
+	return []Order{}
+}
 
-		bef, in := getStrBeforeAndInbetweenBrackets(k)
+func getOrderFields(value string) []Order {
+	order := []Order{}
 
-		if bef != "sort" {
-			return
+	sorts := splitStringBySeparator(value, QueryParamSeparatorMap)
+
+	for _, sort := range sorts {
+		s := splitStringBySeparator(sort, QueryParamSeparatorValue)
+		if len(s) != 2 {
+			continue
 		}
 
-		idx, err := strconv.Atoi(in)
+		o, err := getOrder(s[0], s[1])
 		if err != nil {
-			return
+			continue
 		}
 
-		vSpaceIdx := strings.Index(v, " ")
+		order = append(order, o)
+	}
 
-		if vSpaceIdx == -1 {
-			s = append(s, Order{Field: v, Asc: false, idx: idx})
-			return
-		}
+	return order
+}
 
-		field := v[:vSpaceIdx]
-		ascOrDescStr := v[vSpaceIdx+1:]
+func getOrder(field, value string) (Order, error) {
+	if !hasALetter(field) {
+		return Order{}, errors.New("invalid order field")
+	}
 
-		if ascOrDescStr == "desc" || ascOrDescStr == "DESC" {
-			s = append(s, Order{Field: field, Asc: false, idx: idx})
-		} else {
-			s = append(s, Order{Field: field, Asc: true, idx: idx})
-		}
+	return Order{
+		Field: field,
+		Asc:   strings.ToLower(value) == "asc",
+	}, nil
+}
+
+func GetOrderFromQuery(c *fiber.Ctx) []Order {
+	queryParams := queryParamsToMap(c)
+	order := getOrderFromQuery(queryParams)
+	return order
+}
+
+func queryParamsToMap(c *fiber.Ctx) map[string]string {
+	queryParams := make(map[string]string)
+
+	c.Context().QueryArgs().VisitAll(func(key []byte, value []byte) {
+		queryParams[string(key)] = string(value)
 	})
 
-	sort.SliceStable(s, func(i, j int) bool { return s[i].idx < s[j].idx })
-
-	return s
+	return queryParams
 }

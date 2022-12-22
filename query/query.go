@@ -23,13 +23,14 @@ type Filter struct {
 type FilterOperator string
 
 const (
-	FilterOperatorEqual    FilterOperator = "eq"
-	FilterOperatorContains FilterOperator = "contains"
+	FilterOperatorEqual       FilterOperator = "eq"
+	FilterOperatorContains    FilterOperator = "contains"
+	FilterOperatorGreaterThan FilterOperator = "gt"
 )
 
 func (f *FilterOperator) IsValid() bool {
 	switch *f {
-	case FilterOperatorEqual, FilterOperatorContains:
+	case FilterOperatorEqual, FilterOperatorContains, FilterOperatorGreaterThan:
 		return true
 	}
 
@@ -78,27 +79,48 @@ func getPositiveIntFromQueryWithFallback(ctx *fiber.Ctx, key string, fallbackVal
 	return i
 }
 
-// eg: "ilove[brazil]" -> "ilove", "brazil"
-func getStrBeforeAndInbetweenBrackets(k string) (string, FilterOperator) {
-	s := strings.Index(k, "[")
-	if s == -1 {
-		return "", ""
+// eg: "i[love]brazil" -> Filter{Field: "i", Operation: FilterOperator("love"), Value: "brazil"}
+func getFilter(value string) (Filter, error) {
+	opStart := strings.Index(value, string(QueryParamSeparatorOperatorStart))
+	if opStart == -1 {
+		return Filter{}, errors.New("invalid filter")
 	}
 
-	e := strings.Index(k, "]")
-	if e == -1 {
-		return "", ""
+	opEnd := strings.Index(value, string(QueryParamSeparatorOperatorEnd))
+	if opEnd == -1 {
+		return Filter{}, errors.New("invalid filter")
 	}
 
-	return k[:s], FilterOperator(k[s+1 : e])
+	o := FilterOperator(value[opStart+1 : opEnd])
+	if !o.IsValid() {
+		return Filter{}, errors.New("invalid filter operator")
+	}
+
+	f := value[:opStart]
+	if !hasALetter(f) {
+		return Filter{}, errors.New("invalid filter field")
+	}
+
+	v := value[opEnd+1:]
+	if v == "" {
+		return Filter{}, errors.New("invalid filter value")
+	}
+
+	return Filter{
+		Field:     f,
+		Operation: o,
+		Value:     v,
+	}, nil
 }
 
 type QueryParamSeparator string
 
 const (
-	QueryParamSeparatorArray QueryParamSeparator = ";"
-	QueryParamSeparatorMap   QueryParamSeparator = ","
-	QueryParamSeparatorValue QueryParamSeparator = ":"
+	QueryParamSeparatorArray         QueryParamSeparator = ";"
+	QueryParamSeparatorMap           QueryParamSeparator = ","
+	QueryParamSeparatorValue         QueryParamSeparator = ":"
+	QueryParamSeparatorOperatorStart QueryParamSeparator = "["
+	QueryParamSeparatorOperatorEnd   QueryParamSeparator = "]"
 )
 
 func splitStringBySeparator(s string, sep QueryParamSeparator) []string {
@@ -112,23 +134,35 @@ func GetPaginationFromQuery(ctx *fiber.Ctx) Paginable {
 	}
 }
 
-func GetFilterFromQuery(c *fiber.Ctx) []Filter {
-	f := []Filter{}
+func getFilterFromQuery(queryParams map[string]string) []Filter {
+	if value, ok := queryParams[string(QueryKeyFilters)]; ok {
+		return getFilterFields(value)
+	}
 
-	c.Context().QueryArgs().VisitAll(func(key, val []byte) {
-		k := string(key)
-		v := string(val)
+	return []Filter{}
+}
 
-		field, op := getStrBeforeAndInbetweenBrackets(k)
+func getFilterFields(value string) []Filter {
+	filters := []Filter{}
 
-		if !hasALetter(string(op)) {
-			return
+	fields := splitStringBySeparator(value, QueryParamSeparatorMap)
+
+	for _, field := range fields {
+		f, err := getFilter(field)
+		if err != nil {
+			continue
 		}
 
-		f = append(f, Filter{Field: field, Operation: op, Value: v})
-	})
+		filters = append(filters, f)
+	}
 
-	return f
+	return filters
+}
+
+func GetFilterFromQuery(c *fiber.Ctx) []Filter {
+	queryParams := queryParamsToMap(c)
+	filter := getFilterFromQuery(queryParams)
+	return filter
 }
 
 func getOrderFromQuery(queryParams map[string]string) []Order {

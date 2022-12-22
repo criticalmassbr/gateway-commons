@@ -219,6 +219,11 @@ func TestHasOneLetter(t *testing.T) {
 			args: args{s: "      "},
 			want: false,
 		},
+		{
+			name: "should return false when string has no letters",
+			args: args{s: "."},
+			want: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -249,6 +254,11 @@ func TestFilterOperatorIsValid(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "should return true when operator is valid",
+			args: args{operator: "gt"},
+			want: true,
+		},
+		{
 			name: "should return false when operator is invalid",
 			args: args{operator: "anything else"},
 			want: false,
@@ -264,6 +274,203 @@ func TestFilterOperatorIsValid(t *testing.T) {
 			}
 			got := f.Operation.IsValid()
 			assert.Equal(t, tt.want, got, "got: %v, want: %v", got, tt.want)
+		})
+	}
+}
+
+func TestGetFilterFromQuery(t *testing.T) {
+	type args struct {
+		queryParams map[string]string
+	}
+	tests := []struct {
+		name string
+		args args
+		want []Filter
+	}{
+		{
+			name: "should return empty slice when query params has no filters",
+			args: args{queryParams: map[string]string{
+				"limit":  "10",
+				"offset": "0",
+			}},
+			want: []Filter{},
+		},
+		{
+			name: "should return empty slice when query params has invalid filters",
+			args: args{queryParams: map[string]string{
+				"limit":   "10",
+				"offset":  "0",
+				"filters": "a",
+			}},
+			want: []Filter{},
+		},
+		{
+			name: "should return empty slice when query params has invalid filters",
+			args: args{queryParams: map[string]string{
+				"limit":   "10",
+				"offset":  "0",
+				"filters": "a:asc",
+			}},
+			want: []Filter{},
+		},
+		{
+			name: "should return empty slice when query params has invalid filters",
+			args: args{queryParams: map[string]string{
+				"limit":   "10",
+				"offset":  "0",
+				"filters": "a:asc,b:desc",
+			}},
+			want: []Filter{},
+		},
+		{
+			name: "should return empty slice when query params has invalid filters",
+			args: args{queryParams: map[string]string{
+				"limit":   "10",
+				"offset":  "0",
+				"filters": "a[eqb",
+			}},
+			want: []Filter{},
+		},
+		{
+			name: "should return empty slice when query params has invalid filters",
+			args: args{queryParams: map[string]string{
+				"limit":   "10",
+				"offset":  "0",
+				"filters": "aeq]b",
+			}},
+			want: []Filter{},
+		},
+		{
+			name: "should return Filter slice when query params has valid filters",
+			args: args{queryParams: map[string]string{
+				"limit":   "10",
+				"offset":  "0",
+				"filters": "a[eq]b",
+			}},
+			want: []Filter{
+				{
+					Field:     "a",
+					Operation: FilterOperator("eq"),
+					Value:     "b",
+				},
+			},
+		},
+		{
+			name: "should return Filter slice when query params has valid filters",
+			args: args{queryParams: map[string]string{
+				"limit":   "10",
+				"offset":  "0",
+				"filters": "a[contains]b",
+			}},
+			want: []Filter{
+				{
+					Field:     "a",
+					Operation: FilterOperator("contains"),
+					Value:     "b",
+				},
+			},
+		},
+		{
+			name: "should return Filter slice with omitted values when query params has valid and invalid filters",
+			args: args{queryParams: map[string]string{
+				"limit":   "10",
+				"offset":  "0",
+				"filters": "a[eq]b,c[]d,e[eq]f",
+			}},
+			want: []Filter{
+				{
+					Field:     "a",
+					Operation: FilterOperator("eq"),
+					Value:     "b",
+				},
+				{
+					Field:     "e",
+					Operation: FilterOperator("eq"),
+					Value:     "f",
+				},
+			},
+		},
+		{
+			name: "should return Filter slice with omitted values when query params has valid and invalid filters",
+			args: args{queryParams: map[string]string{
+				"limit":   "10",
+				"offset":  "0",
+				"filters": "a[eq]b,[eq]d,e[contains]f",
+			}},
+			want: []Filter{
+				{
+					Field:     "a",
+					Operation: FilterOperator("eq"),
+					Value:     "b",
+				},
+				{
+					Field:     "e",
+					Operation: FilterOperator("contains"),
+					Value:     "f",
+				},
+			},
+		},
+		{
+			name: "should return Filter slice with omitted values when query params has valid and invalid filters",
+			args: args{queryParams: map[string]string{
+				"limit":   "10",
+				"offset":  "0",
+				"filters": "a[eq]b,t[eq],e[contains]f",
+			}},
+			want: []Filter{
+				{
+					Field:     "a",
+					Operation: FilterOperator("eq"),
+					Value:     "b",
+				},
+				{
+					Field:     "e",
+					Operation: FilterOperator("contains"),
+					Value:     "f",
+				},
+			},
+		},
+		{
+			name: "should return Filter slice with omitted values when query params has valid and invalid filters",
+			args: args{queryParams: map[string]string{
+				"limit":   "10",
+				"offset":  "0",
+				"filters": "a[eq]b,[eq],e[contains]f",
+			}},
+			want: []Filter{
+				{
+					Field:     "a",
+					Operation: FilterOperator("eq"),
+					Value:     "b",
+				},
+				{
+					Field:     "e",
+					Operation: FilterOperator("contains"),
+					Value:     "f",
+				},
+			},
+		},
+		{
+			name: "should return Filter slice when query params has valid filters",
+			args: args{queryParams: map[string]string{
+				"limit":   "10",
+				"offset":  "0",
+				"filters": "a[eq]b;c[eq]d;e[eq]f",
+			}},
+			want: []Filter{
+				{
+					Field:     "a",
+					Operation: FilterOperator("eq"),
+					Value:     "b;c[eq]d;e[eq]f",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getFilterFromQuery(tt.args.queryParams)
+			assert.True(t, reflect.DeepEqual(tt.want, got), "got: %v, want: %v", got, tt.want)
 		})
 	}
 }

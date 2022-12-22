@@ -212,6 +212,21 @@ func GetOrderFromQuery(c *fiber.Ctx) []Order {
 	return order
 }
 
+func GetSearchFromQuery(c *fiber.Ctx) string {
+	queryParams := queryParamsToMap(c)
+	search := getSearchFromQuery(queryParams)
+	return search
+}
+
+func getSearchFromQuery(queryParams map[string]string) string {
+	trimmable := " "
+	if value, ok := queryParams[string(QueryKeySearch)]; ok {
+		return strings.Trim(value, trimmable)
+	}
+
+	return ""
+}
+
 func queryParamsToMap(c *fiber.Ctx) map[string]string {
 	queryParams := make(map[string]string)
 

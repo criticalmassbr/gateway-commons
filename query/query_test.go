@@ -474,3 +474,85 @@ func TestGetFilterFromQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestGetSearchFromQuery(t *testing.T) {
+	type args struct {
+		queryParams map[string]string
+	}
+
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "should return empty string when query params has no search",
+			args: args{queryParams: map[string]string{
+				"limit":  "10",
+				"offset": "0",
+			}},
+			want: "",
+		},
+		{
+			name: "should return empty string when query params has empty search",
+			args: args{queryParams: map[string]string{
+				"limit":  "10",
+				"offset": "0",
+				"search": "",
+			}},
+			want: "",
+		},
+		{
+			name: "should return empty string when query params has empty search",
+			args: args{queryParams: map[string]string{
+				"limit":  "10",
+				"offset": "0",
+				"search": " ",
+			}},
+			want: "",
+		},
+		{
+			name: "should return empty string when query params has empty search",
+			args: args{queryParams: map[string]string{
+				"limit":  "10",
+				"offset": "0",
+				"search": "       ",
+			}},
+			want: "",
+		},
+		{
+			name: "should return search string when query params has valid search",
+			args: args{queryParams: map[string]string{
+				"limit":  "10",
+				"offset": "0",
+				"search": "abc",
+			}},
+			want: "abc",
+		},
+		{
+			name: "should return search string when query params has valid search",
+			args: args{queryParams: map[string]string{
+				"limit":  "10",
+				"offset": "0",
+				"search": "abc def",
+			}},
+			want: "abc def",
+		},
+		{
+			name: "should return search string when query params has valid search",
+			args: args{queryParams: map[string]string{
+				"limit":  "10",
+				"offset": "0",
+				"search": "          abc def                    ",
+			}},
+			want: "abc def",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getSearchFromQuery(tt.args.queryParams)
+			assert.True(t, tt.want == got, "got: %v, want: %v", got, tt.want)
+		})
+	}
+}

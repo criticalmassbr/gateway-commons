@@ -23,14 +23,26 @@ type Filter struct {
 type FilterOperator string
 
 const (
-	FilterOperatorEqual       FilterOperator = "eq"
-	FilterOperatorContains    FilterOperator = "contains"
-	FilterOperatorGreaterThan FilterOperator = "gt"
+	FilterOperatorLessThanOrEqual    FilterOperator = "le"
+	FilterOperatorLessThan           FilterOperator = "lt"
+	FilterOperatorGretherThanOrEqual FilterOperator = "ge"
+	FilterOperatorGreaterThan        FilterOperator = "gt"
+	FilterOperatorEqual              FilterOperator = "eq"
+	FilterOperatorNotEqual           FilterOperator = "ne"
+	FilterOperatorIn                 FilterOperator = "in"
+	FilterOperatorStartsWith         FilterOperator = "startsWith"
+	FilterOperatorEndsWith           FilterOperator = "endsWith"
+	FilterOperatorContains           FilterOperator = "contains"
 )
 
 func (f *FilterOperator) IsValid() bool {
 	switch *f {
-	case FilterOperatorEqual, FilterOperatorContains, FilterOperatorGreaterThan:
+	case
+		FilterOperatorLessThan, FilterOperatorIn,
+		FilterOperatorNotEqual, FilterOperatorEqual,
+		FilterOperatorStartsWith, FilterOperatorEndsWith,
+		FilterOperatorContains, FilterOperatorGreaterThan,
+		FilterOperatorGretherThanOrEqual, FilterOperatorLessThanOrEqual:
 		return true
 	}
 

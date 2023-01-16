@@ -1,1 +1,1 @@
-# Simple utility functions for fiber
+Simple utility functions for [MS Gateway](https://github.com/criticalmassbr/ms-gateway)
